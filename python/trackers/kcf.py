@@ -40,6 +40,9 @@ class KCFTracker:
         self.target_width, self.target_height = None, None
         self.gamma = params.gamma
         self.debug = params.debug
+        self._scales = [0.95, 1.0, 1.05]
+        self._current_scale_factor = 1.0
+        self._new_scale = 1.0
     
     def init(self, image, bbox):
         assert bbox[2] >= 0 and bbox[3] >= 0
@@ -48,8 +51,10 @@ class KCFTracker:
         self.target_width = w 
         self.target_height = h
 
-        self.padded_width = int(np.floor(w * (1 + self.params.padding)))
-        self.padded_height = int(np.floor(h * (1 + self.params.padding)))
+        self.padded_width = int(np.floor(self.target_width * (1 + self.params.padding)))
+        self.padded_height = int(np.floor(self.target_height * (1 + self.params.padding)))
+        self.base_padded_width = int(np.floor(self.target_width * (1 + self.params.padding)))
+        self.base_padded_height = int(np.floor(self.target_height * (1 + self.params.padding)))
 
         self.xc = np.floor(x + w / 2)
         self.yc = np.floor(y + h / 2)
@@ -57,8 +62,8 @@ class KCFTracker:
         self.x = self.extract_patch(image)
         self.x = self.extract_features(self.x)
 
-        self.window = create_hanning_window(self.padded_width, self.padded_height)
-        self.y_label_fft = ufft2(self.calculate_label(self.padded_width, self.padded_height))
+        self.window = create_hanning_window(self.base_padded_width, self.base_padded_height)
+        self.y_label_fft = ufft2(self.calculate_label(self.base_padded_width, self.base_padded_height))
         self.x = self.x * self.window
         self.alpha = self._train(self.x)
 
@@ -81,7 +86,9 @@ class KCFTracker:
         
     def extract_patch(self, image):
         center = int(self.xc), int(self.yc)
-        cropped = cv2.getRectSubPix(image, (self.padded_width, self.padded_height), center)
+        cropped = cv2.getRectSubPix(image, (int(self.padded_width), int(self.padded_height)), center)
+        interpolation = cv2.INTER_AREA if self._current_scale_factor > 1.0 else cv2.INTER_LINEAR
+        cropped = cv2.resize(cropped, (self.base_padded_width, self.base_padded_height), interpolation=interpolation)
         return cropped
 
     def track(self, image):
@@ -100,17 +107,26 @@ class KCFTracker:
         if self.debug:
             cv2.imshow("response", responses)
 
-        if yc + 1> self.padded_height / 2:
-             yc -= self.padded_height
-        if xc + 1> self.padded_width / 2:
-             xc -= self.padded_width
+        if yc + 1> self.base_padded_height / 2:
+             yc -= self.base_padded_height
+        if xc + 1> self.base_padded_width / 2:
+             xc -= self.base_padded_width
 
-        self.xc = np.floor(self.xc + xc)
-        self.yc = np.floor(self.yc + yc)
+        self.xc = np.floor(self.xc + xc * self._current_scale_factor)
+        self.yc = np.floor(self.yc + yc * self._current_scale_factor)
 
-        self.pos[0] = self.xc - self.target_width//2
+        self.pos[0] = self.xc - self.target_width//2 
         self.pos[1] = self.yc - self.target_height//2
-        self.pos[2] = self.target_width
+
+        # scale estimation
+        self._update_scale(image)
+
+        self.target_width = np.floor(self.target_width * self._new_scale)
+        self.target_height = np.floor(self.target_height * self._new_scale)
+        self.padded_width = np.floor(self.padded_width * self._new_scale)
+        self.padded_height = np.floor(self.padded_height * self._new_scale)
+
+        self.pos[2] = self.target_width 
         self.pos[3] = self.target_height
 
         x_new = self.extract_patch(image)
@@ -152,3 +168,26 @@ class KCFTracker:
         d = np.sum(x1_f.conj() * x1_f) / N + np.sum(x2_f.conj() * x2_f) / N - 2.0 * c
         k = np.exp(-1.0 / self.sigma**2 * np.clip(d, a_min=0, a_max=None) / d.size)
         return k
+    
+    def create_scaled_images(self, image):
+        scaled_images = []
+        for scale in self._scales:
+            scaled_roi = cv2.getRectSubPix(image, (int(self.padded_width * scale), int(self.padded_height * scale)), (self.xc, self.yc))
+            interpolation = cv2.INTER_AREA if scale > 1.0 else cv2.INTER_LINEAR
+            scaled_roi = cv2.resize(scaled_roi, (self.base_padded_width, self.base_padded_height), interpolation=interpolation)
+            scaled_images.append(scaled_roi)
+        return scaled_images
+    
+    def _update_scale(self, image):
+        scaled_examples = self.create_scaled_images(image)
+        max_corr = -np.inf
+        for z, scale in zip(scaled_examples, self._scales):
+            z = self.extract_features(z)
+            z = z * self.window
+            k = self._kernel_correlation(z, self.x)
+            responses = np.real(uifft2(self.alpha * ufft2(k)))
+            if responses.max() > max_corr:
+                max_corr = responses.max()
+                self._new_scale = scale
+
+        self._current_scale_factor *= self._new_scale
