@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import cv2
 from numpy.fft import fft2, ifft2
 
+from confidence.psr import calculate_psr
+from trackers.base_tracker import BaseTracker
 
 @dataclass
 class KCFParams:
@@ -28,7 +30,7 @@ def create_hanning_window(w, h):
     return hann2d[:, :, None]
 
 
-class KCFTracker:
+class KCFTracker(BaseTracker):
     def __init__(self, params: KCFParams):
         self.params = params
         self.lambda_reg = params.lambda_reg
@@ -91,7 +93,7 @@ class KCFTracker:
         cropped = cv2.resize(cropped, (self.base_padded_width, self.base_padded_height), interpolation=interpolation)
         return cropped
 
-    def track(self, image):
+    def update(self, image):
         z = self.extract_patch(image)
         z = self.extract_features(z)
         z = z * self.window
@@ -119,7 +121,8 @@ class KCFTracker:
         self.pos[1] = self.yc - self.target_height//2
 
         # scale estimation
-        self._update_scale(image)
+        result_response_map = self._update_scale(image)
+        confidence = calculate_psr(result_response_map, exclude_radius=4, rolled=True)
 
         self.target_width = np.floor(self.target_width * self._new_scale)
         self.target_height = np.floor(self.target_height * self._new_scale)
@@ -140,7 +143,7 @@ class KCFTracker:
         if self.debug:
             cv2.imshow("x", self.x)
 
-        return self.pos   
+        return self.pos, confidence
 
     def _train(self, x):
         k = self._kernel_correlation(x, x)
@@ -181,6 +184,7 @@ class KCFTracker:
     def _update_scale(self, image):
         scaled_examples = self.create_scaled_images(image)
         max_corr = -np.inf
+        result_response_map = None
         for z, scale in zip(scaled_examples, self._scales):
             z = self.extract_features(z)
             z = z * self.window
@@ -188,6 +192,8 @@ class KCFTracker:
             responses = np.real(uifft2(self.alpha * ufft2(k)))
             if responses.max() > max_corr:
                 max_corr = responses.max()
+                result_response_map = responses
                 self._new_scale = scale
 
         self._current_scale_factor *= self._new_scale
+        return result_response_map
