@@ -143,7 +143,7 @@ class KCFTracker(BaseTracker):
         if self.debug:
             cv2.imshow("x", self.x)
 
-        return self.pos, confidence
+        return confidence, self.pos
 
     def _train(self, x):
         k = self._kernel_correlation(x, x)
