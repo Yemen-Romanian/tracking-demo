@@ -2,6 +2,7 @@ import cv2
 import logging
 from pathlib import Path
 import argparse
+import time
 
 from trackers.kcf import KCFTracker, KCFParams
 from utils import get_cv2_pattern_from_folder
@@ -39,7 +40,7 @@ def build_video_capture(video_path):
     return cv2.VideoCapture(video_root_folder / image_name_pattern)
 
 
-def run_demo(data_path, tracker_type):
+def run_demo(data_path, tracker_type, show_fps=True):
     capture = build_video_capture(data_path)
 
     if not capture.isOpened():
@@ -62,18 +63,21 @@ def run_demo(data_path, tracker_type):
             cv2.destroyAllWindows()
             return
 
+        start_time = time.time()
         tracking_result, new_bbox = tracker.update(frame)
-        print(tracking_result)
+        end_time = time.time()
+
+        # Calculate FPS using time for each frame
+        if end_time != start_time:
+            fps = 1.0 / (end_time - start_time)
 
         x, y, w, h = map(int, new_bbox)
 
         if tracking_result:
-            print("detected object")
             frame_to_display = cv2.rectangle(
                 frame, (x, y), (x + w, y + h), bbox_color, 2, 1
             )
         else:
-            print("could not detect object")
             frame_to_display = cv2.putText(
                 frame,
                 "Could not detect object",
@@ -81,6 +85,20 @@ def run_demo(data_path, tracker_type):
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.75,
                 (0, 0, 255),
+            )
+
+        # Show FPS if enabled
+        if show_fps:
+            fps_text = f"FPS: {fps:.2f}"
+            frame_to_display = cv2.putText(
+                frame_to_display,
+                fps_text,
+                (10, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 0),
+                1,
+                cv2.LINE_AA,
             )
 
         cv2.imshow("Tracking demo", frame_to_display)
@@ -107,10 +125,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--tracker_type",
-        default="kcf",
+        default="nano",
         help="supported trackers: kcf, nano, tld",
+    )
+    parser.add_argument(
+        "--show_fps",
+        type=bool,
+        default=True,
+        help="Show speed estimation (FPS) on the video (default: True)",
     )
 
     args = parser.parse_args()
 
-    run_demo(args.data_path, args.tracker_type)
+    run_demo(args.data_path, args.tracker_type, args.show_fps)

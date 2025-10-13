@@ -9,11 +9,13 @@ def get_cv2_pattern_from_folder(folder_path):
         raise ValueError("No files found in folder.")
 
     first_name = files[0].name
-    match = re.search(r'(\d+)(\.\w+)$', first_name)
+    # Match any prefix, then a sequence of digits, then extension
+    match = re.search(r'^(.*?)(\d+)(\.\w+)$', first_name)
 
     if not match:
         raise ValueError(f"Could not extract numeric pattern from: {first_name}")
 
-    num_part, ext = match.groups()
+    prefix, num_part, ext = match.groups()
     pad_len = len(num_part)
-    return f"%0{pad_len}d{ext}"
+    # Compose pattern with prefix, zero-padded number, and extension
+    return f"{prefix}%0{pad_len}d{ext}"
