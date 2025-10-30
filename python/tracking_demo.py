@@ -15,8 +15,11 @@ def build_tracker(tracker_name: str):
         params = cv2.TrackerNano_Params()
         params.backend = cv2.dnn.DNN_BACKEND_DEFAULT
         params.target = cv2.dnn.DNN_TARGET_CPU
-        params.backbone = "../network_weights/nano/nanotrack_backbone_sim.onnx"
-        params.neckhead = "../network_weights/nano/nanotrack_head_sim.onnx"
+        # Use paths relative to this file (python/tracking_demo.py) so they
+        # work regardless of the current working directory.
+        weights_dir = Path(__file__).resolve().parent.parent / "network_weights" / "nano"
+        params.backbone = str(weights_dir / "nanotrack_backbone_sim.onnx")
+        params.neckhead = str(weights_dir / "nanotrack_head_sim.onnx")
         return cv2.TrackerNano_create(params)
     elif tracker_name == "tld":
         return cv2.legacy.TrackerTLD_create()
