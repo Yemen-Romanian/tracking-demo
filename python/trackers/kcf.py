@@ -11,6 +11,7 @@ class KCFParams:
     features: str = "gray"
     lambda_reg: float = 1e-4
     gamma: float = 0.075
+    update_scale: bool = True
     padding: float = 1.5
     kernel: str = "rbf"
     rbf_sigma: float = 0.1
@@ -42,9 +43,13 @@ class KCFTracker(BaseTracker):
         self.target_width, self.target_height = None, None
         self.gamma = params.gamma
         self.debug = params.debug
-        self._scales = [0.95, 1.0, 1.05]
+        self._scales = [0.95, 1.0, 1.05] if params.update_scale else [1.0]
         self._current_scale_factor = 1.0
         self._new_scale = 1.0
+
+        # save current image and filter to possibly update in the future
+        self._current_image = None
+        self._current_alpha = None
     
     def init(self, image, bbox):
         assert bbox[2] >= 0 and bbox[3] >= 0
@@ -134,16 +139,22 @@ class KCFTracker(BaseTracker):
 
         x_new = self.extract_patch(image)
         x_new = self.extract_features(x_new)
-        x_new = x_new * self.window
-        alpha_new = self._train(x_new)
+        self._current_image = x_new * self.window
+        self._current_alpha = self._train(x_new)
 
-        self.x = self.gamma * x_new + (1 - self.gamma) * self.x
-        self.alpha = self.gamma * alpha_new + (1 - self.gamma) * self.alpha
+        # self.update_model()
 
         if self.debug:
             cv2.imshow("x", self.x)
 
         return confidence, self.pos
+    
+    def update_model(self):
+        if self._current_alpha is None:
+            return
+        
+        self.x = self.gamma * self._current_image + (1 - self.gamma) * self.x
+        self.alpha = self.gamma * self._current_alpha + (1 - self.gamma) * self.alpha
 
     def _train(self, x):
         k = self._kernel_correlation(x, x)
