@@ -5,6 +5,7 @@ import argparse
 import time
 
 from trackers.kcf import KCFTracker, KCFParams
+from trackers.siamfc.siamfc_tracker import SiamFCTracker
 from utils import get_cv2_pattern_from_folder
 
 
@@ -23,6 +24,9 @@ def build_tracker(tracker_name: str):
         return cv2.TrackerNano_create(params)
     elif tracker_name == "tld":
         return cv2.legacy.TrackerTLD_create()
+    elif tracker_name == "siamfc":
+        weights_path = Path(__file__).resolve().parent.parent / "network_weights" / "SiamFC.pth"
+        return SiamFCTracker(str(weights_path))
     else:
         raise ValueError(f"Could not create tracker with name {tracker_name}")
 

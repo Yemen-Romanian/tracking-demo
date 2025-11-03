@@ -56,7 +56,7 @@ class TrackerDemoGUI:
         tracker_frame.grid(row=0, column=0, padx=10, pady=10)
         tracker_frame.columnconfigure(0, weight=1)
 
-        trackers = [("KCF", "kcf"), ("NanoTrack", "nano"), ("TLD", "tld")]
+        trackers = [("KCF", "kcf"), ("NanoTrack", "nano"), ("TLD", "tld"), ("SiamFC", "siamfc")]
         for i, (text, value) in enumerate(trackers):
             ttk.Radiobutton(tracker_frame, text=text, value=value,
                              variable=self.tracker_type, style='Large.TRadiobutton').grid(
