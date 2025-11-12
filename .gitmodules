@@ -1,0 +1,3 @@
+[submodule "python/thirdparty/CMT"]
+	path = python/thirdparty/CMT
+	url = https://github.com/Yemen-Romanian/CMT
