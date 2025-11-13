@@ -12,7 +12,7 @@ class TrackerDemoGUI:
         self.root.title("Tracker Demo GUI")
         
         # Set window size and make it non-resizable
-        self.root.geometry("500x400")
+        self.root.geometry("700x400")
         self.root.resizable(False, False)
         # Configure grid weights to center the content
         self.root.grid_rowconfigure(0, weight=1)
@@ -56,7 +56,7 @@ class TrackerDemoGUI:
         tracker_frame.grid(row=0, column=0, padx=10, pady=10)
         tracker_frame.columnconfigure(0, weight=1)
 
-        trackers = [("KCF", "kcf"), ("NanoTrack", "nano"), ("TLD", "tld"), ("SiamFC", "siamfc")]
+        trackers = [("KCF", "kcf"), ("NanoTrack", "nano"), ("TLD", "tld"), ("SiamFC", "siamfc"), ("Keypoints", "cmt")]
         for i, (text, value) in enumerate(trackers):
             ttk.Radiobutton(tracker_frame, text=text, value=value,
                              variable=self.tracker_type, style='Large.TRadiobutton').grid(
